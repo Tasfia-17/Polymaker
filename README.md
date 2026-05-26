@@ -13,6 +13,67 @@ It is the only open-source Polymarket MM bot updated for the **March 2026 fee st
 
 ---
 
+## LLM agent reasoning layer
+
+Before quoting each market, PolyMaker calls an LLM agent (`agent_brain.py`) that:
+
+1. Fetches recent news headlines relevant to the market question via NewsAPI
+2. Sends the question, current mid-price, category, and headlines to an LLM
+3. Receives a structured JSON decision:
+   - `skip`: stop quoting this market (e.g. resolution is imminent)
+   - `risk_aversion_multiplier`: widen or tighten quotes based on news sentiment (0.5 to 3.0)
+   - `resolution_risk`: low / medium / high
+   - `reasoning`: one-sentence explanation (logged and exposed in `/status`)
+
+The engine multiplies its base `risk_aversion` by the agent's multiplier before computing A-S quotes. Decisions are cached for 120 seconds per market to avoid LLM call overhead on every tick.
+
+The agent works with any OpenAI-compatible API. Set `LLM_BASE_URL` to use a local model (Ollama, LM Studio, etc.). Falls back to neutral decisions if no API key is set.
+
+```bash
+# Example: agent decides to widen quotes before a Fed announcement
+# [AgentBrain] Fed rate cut in September? skip=False ra_mult=2.1 risk=high
+# | Fed minutes released today show hawkish tone, increasing resolution uncertainty
+```
+
+---
+
+## Circle Gateway cross-chain bridge
+
+`gateway_bridge.py` bridges USDC from Polygon (where Polymarket operates) to Arc testnet (where PolyMaker wallets live) using Circle Gateway.
+
+```
+User has USDC on Polygon
+        |
+        v
+POST /bridge  {user_ref, source_wallet_id, amount_usdc}
+        |
+        v
+Circle Gateway cross-chain transfer
+  Polygon (chain 137) -> Arc testnet (chain 5042002)
+  sub-500ms, ~$0.01 fee in USDC
+        |
+        v
+USDC arrives in user's Arc wallet (created via POST /wallets)
+        |
+        v
+PolyMaker uses USDC to fund maker orders on Polymarket
+```
+
+```bash
+# Create Arc wallet
+curl -X POST http://localhost:8000/wallets -d '{"user_ref": "alice"}'
+
+# Bridge USDC from Polygon to Arc
+curl -X POST http://localhost:8000/bridge \
+  -H "Content-Type: application/json" \
+  -d '{"user_ref": "alice", "source_wallet_id": "polygon-wallet-id", "amount_usdc": 100.0}'
+
+# Poll bridge status
+curl http://localhost:8000/bridge/{transfer_id}
+```
+
+---
+
 ## What problem this solves
 
 Polymarket introduced a new fee formula in March 2026. The formula is:
@@ -115,6 +176,7 @@ PolyMaker uses Circle developer-controlled wallets on Arc testnet (chain ID 5042
 | Circle tool | How it is used |
 |---|---|
 | Developer-Controlled Wallets | One Arc testnet wallet created per user via POST /wallets |
+| Gateway | Cross-chain USDC bridge from Polygon to Arc via POST /bridge |
 | Arc testnet | USDC-native chain, no ETH needed for gas |
 | USDC | Native settlement currency; maker rebates paid in USDC |
 | Builder codes | Attached to every Polymarket order; earns fees on every taker fill |
@@ -208,6 +270,8 @@ python -m pytest tests/ -v
 polymaker/
 ├── main.py              # CLI entry point, Rich live dashboard
 ├── engine.py            # Event-driven market making loop
+├── agent_brain.py       # LLM reasoning layer (news + sentiment -> risk decisions)
+├── gateway_bridge.py    # Circle Gateway cross-chain USDC bridge (Polygon -> Arc)
 ├── book_feed.py         # WebSocket order book state machine
 ├── quoting.py           # Avellaneda-Stoikov in logit space
 ├── fees.py              # 2026 fee formula, per-category exponents

@@ -419,7 +419,10 @@ footer a:hover { color: var(--ink); }
 </div>
 
 <script>
-const API = 'http://localhost:8000';
+// Use same origin when deployed (Vercel), fall back to localhost for local dev
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:8000'
+  : '';
 
 function log(msg, type = 'info') {
   const el = document.getElementById('log-lines');

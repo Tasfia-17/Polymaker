@@ -18,6 +18,7 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from agent_brain import AgentBrain
 from book_feed import OrderBook
 from clob_client import PolymakerClient
 from fees import Category, get_fee_params, effective_spread_needed
@@ -63,6 +64,7 @@ class MakerEngine:
         self.order_arrival = order_arrival
         self._markets: dict[str, MarketState] = {}
         self._requote_queue: asyncio.Queue = asyncio.Queue()
+        self.brain = AgentBrain()
 
     def add_market(self, info: MarketInfo) -> None:
         self._markets[info.yes_token_id] = MarketState(info=info)
@@ -131,6 +133,18 @@ class MakerEngine:
             self._cancel_open_orders(info)
             return
 
+        # LLM agent reasoning: adjust risk or skip based on news/sentiment
+        decision = self.brain.decide(
+            question=info.question,
+            token_id=token_id,
+            mid=mid,
+            category=info.category.value,
+        )
+        if decision.skip:
+            logger.info(f"AgentBrain skipping {info.question[:40]}: {decision.reasoning}")
+            return
+        effective_risk = self.risk_aversion * decision.risk_aversion_multiplier
+
         # Compute fee-aware minimum spread
         fee_params = get_fee_params(info.category)
         min_half_spread = effective_spread_needed(mid, fee_params)
@@ -149,7 +163,7 @@ class MakerEngine:
             max_inventory=max(max_shares, 1.0),
             sigma_sq=sigma_sq,
             time_to_expiry=time_to_expiry,
-            risk_aversion=self.risk_aversion,
+            risk_aversion=effective_risk,
             order_arrival=self.order_arrival,
             min_spread=min_half_spread,
             tick_size=book.tick_size,
@@ -227,4 +241,5 @@ class MakerEngine:
                 self.inventory.get(tid).fills
                 for tid in self._markets
             ),
+            "agent_decisions": self.brain.all_decisions(),
         }

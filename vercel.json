@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "dashboard.html", "use": "@vercel/static" },
+    { "src": "api.py", "use": "@vercel/python" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api.py" },
+    { "src": "/health", "dest": "/api.py" },
+    { "src": "/wallets(.*)", "dest": "/api.py" },
+    { "src": "/markets(.*)", "dest": "/api.py" },
+    { "src": "/status", "dest": "/api.py" },
+    { "src": "/bridge(.*)", "dest": "/api.py" },
+    { "src": "/dashboard.html", "dest": "/dashboard.html" },
+    { "src": "/", "dest": "/index.html" }
+  ]
+}
