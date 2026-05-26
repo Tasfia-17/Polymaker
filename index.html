@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PolyMaker — Fee-aware Polymarket Market Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif:ital,wght@0,400;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --ink: #000000;
+  --canvas: #f6f3f1;
+  --off-black: #242424;
+  --pale-stone: #4e4d4d;
+  --atmosphere: #cfdaf5;
+  --faint: #797776;
+  --gradient-sky: linear-gradient(160deg, rgb(160,181,235), rgb(167,252,205));
+  --gradient-sunset: linear-gradient(160deg, rgba(255,148,115,0.8) 7%, rgba(160,181,235,0.8) 84%);
+  --gradient-amber: linear-gradient(270deg, rgba(226,193,97,0.7) 23.5%, rgba(243,122,10,0.7) 76%);
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --serif: 'Noto Serif', ui-serif, Georgia, serif;
+  --sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --shadow: rgba(0,0,0,0.1) 0px 0px 10px 0px;
+  --r-card: 40px;
+  --r-btn: 100px;
+  --r-tag: 2000px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { background: var(--canvas); color: var(--ink); font-family: var(--mono); font-size: 16px; line-height: 1.35; overflow-x: hidden; }
+
+/* ── Cinematic keyframes ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slowPushIn {
+  from { opacity: 0; transform: scale(0.97) translateY(16px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes barPulse {
+  0%, 100% { opacity: 0.6; transform: scaleX(1); }
+  50%       { opacity: 1;   transform: scaleX(1.04); }
+}
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes tickerIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Scroll-reveal base ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+
+/* ── Notif bar ── */
+.notif {
+  background: var(--ink); color: var(--canvas);
+  font-size: 13px; padding: 10px 24px;
+  display: flex; align-items: center; justify-content: center; gap: 16px;
+  animation: fadeIn 0.6s ease both;
+}
+.notif a {
+  color: var(--canvas); border: 1px solid rgba(246,243,241,0.5);
+  border-radius: var(--r-btn); padding: 4px 14px;
+  text-decoration: none; font-size: 12px; letter-spacing: 0.05px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.notif a:hover { border-color: var(--canvas); background: rgba(246,243,241,0.08); }
+
+/* ── Nav ── */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(246,243,241,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  padding: 0 40px; height: 60px;
+  display: flex; align-items: center; justify-content: space-between;
+  animation: fadeIn 0.5s ease both 0.1s;
+}
+.brand { font-family: var(--serif); font-size: 20px; letter-spacing: -0.02em; color: var(--ink); text-decoration: none; }
+.nav-links { display: flex; align-items: center; gap: 8px; }
+.nav-link {
+  font-size: 14px; color: var(--off-black); text-decoration: none;
+  padding: 8px 10px; border-radius: var(--r-btn); transition: background 0.15s;
+}
+.nav-link:hover { background: rgba(0,0,0,0.05); }
+.btn-ghost {
+  border: 1px solid var(--off-black); border-radius: var(--r-btn);
+  padding: 8px 20px; font-family: var(--mono); font-size: 14px;
+  color: var(--off-black); background: transparent; cursor: pointer;
+  text-decoration: none; transition: background 0.15s; display: inline-block;
+}
+.btn-ghost:hover { background: rgba(0,0,0,0.05); }
+.btn-primary {
+  background: var(--off-black); color: var(--canvas); border: none;
+  border-radius: var(--r-btn); padding: 12px 28px;
+  font-family: var(--mono); font-size: 14px; cursor: pointer;
+  text-decoration: none; display: inline-block;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+
+/* ── Page ── */
+.page { max-width: 1432px; margin: 0 auto; padding: 0 40px; }
+
+/* ── Animated gradient bar ── */
+.gradient-bar {
+  height: 3px;
+  background: linear-gradient(90deg, rgb(160,181,235), rgb(167,252,205), rgba(255,148,115,0.8), rgb(160,181,235));
+  background-size: 300% 100%;
+  border-radius: 2px;
+  margin: 40px 0;
+  animation: gradientShift 6s ease infinite;
+}
+
+/* ── Hero ── */
+.hero {
+  padding: 100px 0 80px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center;
+}
+.hero-left { display: flex; flex-direction: column; gap: 24px; }
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--off-black); border-radius: var(--r-tag);
+  padding: 4px 14px; font-size: 12px; letter-spacing: 0.05px;
+  color: var(--off-black); width: fit-content;
+  animation: fadeUp 0.7s cubic-bezier(0.22,1,0.36,1) both 0.2s;
+}
+.hero-eyebrow-dot {
+  width: 6px; height: 6px; background: var(--off-black);
+  border-radius: 50%; display: inline-block;
+  animation: barPulse 2.4s ease-in-out infinite;
+}
+h1 {
+  font-family: var(--serif); font-size: 72px; font-weight: 400;
+  line-height: 1.08; letter-spacing: -0.02em; color: var(--ink);
+  animation: slowPushIn 1s cubic-bezier(0.22,1,0.36,1) both 0.3s;
+}
+.hero-sub {
+  font-family: var(--sans); font-size: 18px; color: var(--pale-stone);
+  line-height: 1.6; max-width: 460px;
+  animation: fadeUp 0.8s cubic-bezier(0.22,1,0.36,1) both 0.5s;
+}
+.hero-actions {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  animation: fadeUp 0.8s cubic-bezier(0.22,1,0.36,1) both 0.65s;
+}
+
+/* ── Hero card (floating) ── */
+.hero-right {
+  animation: slowPushIn 1.1s cubic-bezier(0.22,1,0.36,1) both 0.4s;
+}
+.hero-card {
+  background: var(--atmosphere); border-radius: var(--r-card); padding: 40px;
+  box-shadow: var(--shadow);
+  animation: floatCard 6s ease-in-out infinite 1.5s;
+}
+.hero-card-label {
+  font-size: 12px; letter-spacing: 0.05px; color: var(--faint);
+  text-transform: uppercase; margin-bottom: 24px;
+}
+.quote-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 0; border-bottom: 1px solid rgba(0,0,0,0.08); font-size: 14px;
+  animation: tickerIn 0.5s ease both;
+}
+.quote-row:nth-child(2) { animation-delay: 0.8s; }
+.quote-row:nth-child(3) { animation-delay: 1.0s; }
+.quote-row:nth-child(4) { animation-delay: 1.2s; }
+.quote-row:last-child { border-bottom: none; }
+.quote-market { color: var(--off-black); max-width: 200px; }
+.quote-prices { display: flex; gap: 16px; }
+.bid { color: #1a7a4a; font-weight: 500; }
+.ask { color: #b03030; font-weight: 500; }
+.quote-spread { color: var(--faint); font-size: 12px; }
+.hero-card-footer {
+  margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.08);
+  display: flex; justify-content: space-between; font-size: 12px; color: var(--faint);
+}
+.pnl-positive { color: #1a7a4a; font-weight: 500; }
+
+/* ── Section ── */
+section { padding: 80px 0; }
+.section-label {
+  font-size: 12px; letter-spacing: 0.05px; color: var(--faint);
+  text-transform: uppercase; margin-bottom: 16px;
+}
+.section-heading {
+  font-family: var(--serif); font-size: 40px; font-weight: 400;
+  letter-spacing: -0.02em; line-height: 1.2; color: var(--ink); margin-bottom: 16px;
+}
+.section-sub {
+  font-family: var(--sans); font-size: 16px; color: var(--pale-stone);
+  line-height: 1.6; max-width: 520px;
+}
+
+/* ── Feature grid ── */
+.feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 48px; }
+.feature-card {
+  background: var(--atmosphere); border-radius: var(--r-card); padding: 40px;
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s;
+}
+.feature-card:hover { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(0,0,0,0.08); }
+.feature-icon {
+  width: 40px; height: 40px; border-radius: var(--r-btn);
+  margin-bottom: 24px; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-style: normal;
+}
+.feature-icon.sky    { background: var(--gradient-sky); }
+.feature-icon.sunset { background: var(--gradient-sunset); }
+.feature-icon.amber  { background: var(--gradient-amber); }
+.feature-title { font-size: 18px; font-weight: 500; color: var(--ink); margin-bottom: 12px; }
+.feature-desc { font-family: var(--sans); font-size: 15px; color: var(--pale-stone); line-height: 1.6; }
+.feature-desc code { font-family: var(--mono); font-size: 13px; background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
+
+/* ── How it works ── */
+.how-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; margin-top: 48px; }
+.steps { display: flex; flex-direction: column; }
+.step {
+  display: flex; gap: 24px; padding: 24px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  transition: background 0.2s;
+}
+.step:last-child { border-bottom: none; }
+.step-num { font-size: 12px; letter-spacing: 0.05px; color: var(--faint); padding-top: 2px; min-width: 24px; }
+.step-title { font-size: 16px; font-weight: 500; color: var(--ink); margin-bottom: 6px; }
+.step-desc { font-family: var(--sans); font-size: 14px; color: var(--pale-stone); line-height: 1.6; }
+.how-visual { background: var(--atmosphere); border-radius: var(--r-card); padding: 40px; position: sticky; top: 80px; }
+.formula-block {
+  background: var(--canvas); border-radius: 16px; padding: 20px 24px;
+  font-size: 13px; color: var(--off-black); line-height: 2; margin-bottom: 16px;
+}
+.formula-block .comment { color: var(--faint); }
+.formula-block .key { color: var(--ink); font-weight: 500; }
+
+/* ── Fee table ── */
+.fee-section { background: var(--atmosphere); border-radius: var(--r-card); padding: 40px; margin-top: 48px; }
+.fee-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 24px; }
+.fee-table th {
+  text-align: left; font-size: 12px; letter-spacing: 0.05px; color: var(--faint);
+  text-transform: uppercase; padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.1); font-weight: 400;
+}
+.fee-table td { padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.06); color: var(--off-black); }
+.fee-table tr:last-child td { border-bottom: none; }
+.fee-table td:first-child { color: var(--ink); font-weight: 500; }
+.tag {
+  display: inline-block; border: 1px solid var(--faint); color: var(--faint);
+  border-radius: var(--r-tag); padding: 2px 10px; font-size: 12px; letter-spacing: 0.05px;
+}
+
+/* ── CTA ── */
+.cta-section {
+  background: var(--ink); border-radius: var(--r-card); padding: 80px;
+  display: flex; justify-content: space-between; align-items: center; gap: 40px;
+  margin-bottom: 80px; position: relative; overflow: hidden;
+}
+.cta-section::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(160,181,235,0.08) 0%, rgba(167,252,205,0.05) 100%);
+  pointer-events: none;
+}
+.cta-heading {
+  font-family: var(--serif); font-size: 40px; font-weight: 400;
+  letter-spacing: -0.02em; color: var(--canvas); line-height: 1.2; margin-bottom: 16px;
+}
+.cta-sub { font-family: var(--sans); font-size: 16px; color: rgba(246,243,241,0.6); line-height: 1.6; max-width: 400px; }
+.cta-actions { display: flex; gap: 12px; flex-shrink: 0; }
+.btn-canvas {
+  background: var(--canvas); color: var(--ink); border: none;
+  border-radius: var(--r-btn); padding: 14px 32px;
+  font-family: var(--mono); font-size: 14px; cursor: pointer;
+  text-decoration: none; display: inline-block; transition: opacity 0.15s, transform 0.15s;
+}
+.btn-canvas:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-ghost-canvas {
+  border: 1px solid rgba(246,243,241,0.4); border-radius: var(--r-btn);
+  padding: 14px 32px; font-family: var(--mono); font-size: 14px;
+  color: var(--canvas); background: transparent; cursor: pointer;
+  text-decoration: none; display: inline-block; transition: border-color 0.15s;
+}
+.btn-ghost-canvas:hover { border-color: var(--canvas); }
+
+/* ── Footer ── */
+footer {
+  border-top: 1px solid rgba(0,0,0,0.08); padding: 40px 0;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: var(--faint); letter-spacing: 0.05px;
+}
+footer a { color: var(--faint); text-decoration: none; transition: color 0.15s; }
+footer a:hover { color: var(--ink); }
+.footer-links { display: flex; gap: 24px; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; gap: 40px; padding: 60px 0 40px; }
+  .hero-right { display: none; }
+  h1 { font-size: 48px; }
+  .feature-grid { grid-template-columns: 1fr; }
+  .how-grid { grid-template-columns: 1fr; }
+  .how-visual { position: static; }
+  .cta-section { flex-direction: column; padding: 40px; }
+  nav { padding: 0 16px; }
+  .page { padding: 0 16px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Notif bar -->
+<div class="notif">
+  <span>Built for the Agora Agents Hackathon · Arc × Circle × Polymarket</span>
+  <a href="dashboard.html">Open Dashboard →</a>
+</div>
+
+<!-- Nav -->
+<nav>
+  <a class="brand" href="index.html">PolyMaker</a>
+  <div class="nav-links">
+    <a class="nav-link" href="#how">How it works</a>
+    <a class="nav-link" href="#fees">Fee model</a>
+    <a class="btn-ghost" href="https://github.com/Tasfia-17/Polymaker" target="_blank">GitHub</a>
+    <a class="btn-primary" href="dashboard.html">Open App</a>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-left">
+      <div class="hero-eyebrow">
+        <span class="hero-eyebrow-dot"></span>
+        Updated for 2026 fee structure
+      </div>
+      <h1>Market making,<br/><em>done correctly.</em></h1>
+      <p class="hero-sub">The only open-source Polymarket market maker with the correct 2026 fee formula, Avellaneda-Stoikov quoting in logit space, and Circle Arc wallet management.</p>
+      <div class="hero-actions">
+        <a class="btn-primary" href="dashboard.html">Open Dashboard</a>
+        <a class="btn-ghost" href="https://github.com/Tasfia-17/Polymaker" target="_blank">View on GitHub</a>
+      </div>
+    </div>
+    <div class="hero-right">
+      <div class="hero-card">
+        <div class="hero-card-label">Live quotes · 3 markets</div>
+        <div class="quote-row">
+          <div class="quote-market">Will BTC exceed $120k by July?</div>
+          <div class="quote-prices">
+            <span class="bid">0.412</span>
+            <span class="ask">0.438</span>
+          </div>
+          <div class="quote-spread">Δ 0.026</div>
+        </div>
+        <div class="quote-row">
+          <div class="quote-market">NBA Finals — Celtics win?</div>
+          <div class="quote-prices">
+            <span class="bid">0.531</span>
+            <span class="ask">0.549</span>
+          </div>
+          <div class="quote-spread">Δ 0.018</div>
+        </div>
+        <div class="quote-row">
+          <div class="quote-market">Fed rate cut in September?</div>
+          <div class="quote-prices">
+            <span class="bid">0.618</span>
+            <span class="ask">0.642</span>
+          </div>
+          <div class="quote-spread">Δ 0.024</div>
+        </div>
+        <div class="hero-card-footer">
+          <span>Builder fees earned today</span>
+          <span class="pnl-positive">+$4.82 USDC</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="gradient-bar"></div>
+
+  <!-- Features -->
+  <section>
+    <div class="reveal">
+      <div class="section-label">Why PolyMaker</div>
+      <h2 class="section-heading">Three things every<br/>other bot gets wrong.</h2>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon sky">Σ</div>
+        <div class="feature-title">Correct fee formula</div>
+        <div class="feature-desc">The 2026 fee change broke every existing open-source MM bot. PolyMaker uses the exact formula: <code>C × feeRate × p × (1-p)^exp</code> with per-category exponents. A maker who doesn't know their true cost can't know if they're profitable.</div>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon sunset">∂</div>
+        <div class="feature-title">Avellaneda-Stoikov quoting</div>
+        <div class="feature-desc">Standard bots place symmetric quotes around mid. PolyMaker uses A-S in logit space — inventory-skewed quotes that widen when you're holding risk and tighten when you're flat. Volatility estimated from real-time mid-price history.</div>
+      </div>
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon amber">⊕</div>
+        <div class="feature-title">Builder code on every fill</div>
+        <div class="feature-desc">Every order carries your Polymarket V2 builder code. Every taker fill earns a rebate paid daily in USDC. Circle developer-controlled wallets on Arc testnet — USDC only, no ETH needed.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section id="how">
+    <div class="how-grid">
+      <div>
+        <div class="reveal">
+          <div class="section-label">How it works</div>
+          <h2 class="section-heading">Event-driven.<br/>Risk-managed.</h2>
+          <p class="section-sub" style="margin-bottom:0">Every book update triggers a requote. Every fill updates inventory. Every position has a stop-loss.</p>
+        </div>
+        <div class="steps" style="margin-top:40px">
+          <div class="step reveal reveal-delay-1">
+            <div class="step-num">01</div>
+            <div>
+              <div class="step-title">Market selection</div>
+              <div class="step-desc">Ranks open Polymarket CLOB markets by MM profitability score. Filters out extreme probabilities, zero-fee geopolitics, and low-volume markets.</div>
+            </div>
+          </div>
+          <div class="step reveal reveal-delay-2">
+            <div class="step-num">02</div>
+            <div>
+              <div class="step-title">Real-time book feed</div>
+              <div class="step-desc">WebSocket connection to Polymarket's market channel. Handles all 7 event types including tick_size_change — critical, must update immediately or orders are rejected.</div>
+            </div>
+          </div>
+          <div class="step reveal reveal-delay-3">
+            <div class="step-num">03</div>
+            <div>
+              <div class="step-title">A-S quote computation</div>
+              <div class="step-desc">Computes optimal bid/ask using Avellaneda-Stoikov in logit space. Inventory skew reduces adverse selection. Fee-aware minimum spread ensures profitability.</div>
+            </div>
+          </div>
+          <div class="step reveal reveal-delay-4">
+            <div class="step-num">04</div>
+            <div>
+              <div class="step-title">Order placement + builder code</div>
+              <div class="step-desc">Cancels stale orders when price moves >0.5%. Places new bid/ask via py-clob-client-v2 with builder code attached. Stop-loss exits market if unrealized PnL breaches threshold.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="how-visual reveal reveal-delay-2">
+        <div class="section-label" style="margin-bottom:20px">Quoting formula</div>
+        <div class="formula-block">
+          <div class="comment"># Reservation price (logit space)</div>
+          <div><span class="key">r</span> = logit(mid) − q·γ·σ²·(T−t)</div>
+          <br/>
+          <div class="comment"># Optimal quotes</div>
+          <div><span class="key">bid</span> = sigmoid(r − δ/2)</div>
+          <div><span class="key">ask</span> = sigmoid(r + δ/2)</div>
+          <br/>
+          <div class="comment"># Fee-aware minimum spread</div>
+          <div><span class="key">min_spread</span> = feeRate·p·(1−p)^exp</div>
+        </div>
+        <div class="formula-block">
+          <div class="comment"># Taker fee (post March 2026)</div>
+          <div><span class="key">fee</span> = C × feeRate × p × (1−p)^<span class="key">exp</span></div>
+          <br/>
+          <div class="comment"># exp varies by category:</div>
+          <div>Crypto / Sports / Politics → <span class="key">1</span></div>
+          <div>Economics / Weather → <span class="key">0.5</span></div>
+          <div>Other / General → <span class="key">2</span></div>
+        </div>
+        <div style="font-size:12px;color:var(--faint);letter-spacing:0.05px">
+          Ref: arXiv:2510.15205 · Avellaneda &amp; Stoikov (2008)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Fee table -->
+  <section id="fees">
+    <div class="reveal">
+      <div class="section-label">Fee model</div>
+      <h2 class="section-heading">Every category.<br/>Exact numbers.</h2>
+      <p class="section-sub">Makers never pay fees. Rebate paid daily in USDC, weighted by your fee-equivalent volume.</p>
+    </div>
+    <div class="fee-section reveal reveal-delay-1">
+      <table class="fee-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Taker rate</th>
+            <th>Exponent</th>
+            <th>Maker rebate</th>
+            <th>Peak effective fee</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Crypto</td><td>7%</td><td>1</td><td>20%</td><td>1.80%</td></tr>
+          <tr><td>Sports</td><td>3%</td><td>1</td><td>25%</td><td>0.75%</td></tr>
+          <tr><td>Finance / Politics</td><td>4%</td><td>1</td><td>25%</td><td>1.00%</td></tr>
+          <tr><td>Economics / Weather</td><td>5%</td><td>0.5</td><td>25%</td><td>1.25%</td></tr>
+          <tr><td>Other / General</td><td>5%</td><td>2</td><td>25%</td><td>1.25%</td></tr>
+          <tr><td>Geopolitics</td><td>0%</td><td>—</td><td>0%</td><td><span class="tag">skipped</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta-section reveal">
+    <div>
+      <div class="cta-heading">Ready to make markets?</div>
+      <p class="cta-sub">Open the dashboard, connect your Polymarket API keys, and start quoting in minutes. Simulation mode available — no real orders until you're ready.</p>
+    </div>
+    <div class="cta-actions">
+      <a class="btn-canvas" href="dashboard.html">Open Dashboard</a>
+      <a class="btn-ghost-canvas" href="https://github.com/Tasfia-17/Polymaker" target="_blank">GitHub →</a>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <span>PolyMaker · Fee-aware Polymarket market maker · Arc testnet</span>
+    <div class="footer-links">
+      <a href="https://arxiv.org/abs/2510.15205" target="_blank">A-S paper</a>
+      <a href="https://docs.polymarket.com/trading/fees" target="_blank">Fee docs</a>
+      <a href="http://localhost:8000/docs" target="_blank">API</a>
+      <a href="https://github.com/Tasfia-17/Polymaker" target="_blank">GitHub</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+// Scroll-reveal using IntersectionObserver (cinematic slow push-in on scroll)
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

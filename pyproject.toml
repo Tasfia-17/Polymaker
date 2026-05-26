@@ -1,0 +1,28 @@
+[project]
+name = "polymaker"
+version = "0.1.0"
+description = "Fee-aware Polymarket market maker with Circle Arc wallet management"
+requires-python = ">=3.11"
+dependencies = [
+    "py-clob-client-v2>=0.1.0",
+    "websockets>=15.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "web3>=7.0.0",
+    "eth-account>=0.13.0",
+    "requests>=2.32.0",
+    "numpy>=2.0.0",
+    "scipy>=1.13.0",
+    "python-dotenv>=1.1.0",
+    "httpx>=0.28.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "circle-developer-controlled-wallets>=1.0.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: requires live Polymarket connection"]
